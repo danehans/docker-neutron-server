@@ -1,0 +1,34 @@
+#!/bin/bash
+#
+# Script to create and run docker-neutron-server image.
+#
+set -x
+set -e
+
+# Check for Root user
+if [ "$(id -u)" != "0" ]; then
+    echo "This script must be run as root or with sudo"
+    exit 1
+fi
+
+# Configure the neutron-server image name
+export IMAGE_NAME="${IMAGE_NAME:-neutron-server}"
+
+# Configure the neutron-server container name
+export CONTAINER_NAME="${CONTAINER_NAME:-neutron-server}"
+
+# Configure the neutron-server hostname
+export NEUTRON_SERVER_HOSTNAME="${NEUTRON_SERVER_HOSTNAME:-$HOSTNAME}"
+
+# Configure the neutron-server container DNS search order.
+export DNS_SEARCH="${DNS_SEARCH:-example.com}"
+
+docker run --privileged -d -h $NEUTRON_SERVER_HOSTNAME --dns-search $DNS_SEARCH -v /sys/fs/cgroup:/sys/fs/cgroup:ro -p 9696:9696 --name="$CONTAINER_NAME" $IMAGE_NAME
+
+# Get the PID of the neutron-server container
+CONTAINER_PID="$(docker inspect --format={{.State.Pid}} $CONTAINER_NAME)"
+
+#Use nsenter to enter the namespaces of the running neutron-server container.
+nsenter -m -u -n -i -p -t $CONTAINER_PID /bin/bash
+
+exit $?

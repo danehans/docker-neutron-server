@@ -3,7 +3,7 @@
 # the neutron.ml2.type_drivers namespace.
 #
 # type_drivers = local,flat,vlan,gre,vxlan
-type_drivers = %TYPE_DRIVER%
+type_drivers = <%= env_type_drivers %>
 # Example: type_drivers = flat,vlan,gre,vxlan
 
 # (ListOpt) Ordered list of network_types to allocate as tenant
@@ -11,7 +11,7 @@ type_drivers = %TYPE_DRIVER%
 # but provides no connectivity between hosts.
 #
 # tenant_network_types = local
-tenant_network_types = %TENANT_NETWORK_TYPES%
+tenant_network_types = <%= env_tenant_network_types %>
 # Example: tenant_network_types = vlan,gre,vxlan
 
 # (ListOpt) Ordered list of networking mechanism driver entrypoints

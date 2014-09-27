@@ -1,4 +1,0 @@
-export OS_USERNAME=demo
-export OS_TENANT_NAME=demo
-export OS_PASSWORD=%DEMO_PASSWORD%
-export OS_AUTH_URL=http://%KEYSTONE_HOST%:5000/v2.0/

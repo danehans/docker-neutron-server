@@ -12,14 +12,27 @@ Run OpenStack Neutron Server in a Docker container.
 Caveats
 -------
 
-The systemd_rhel7 base image used by the Neutron Server container is a private image.
-Use the [Get Started with Docker Containers in RHEL 7](https://access.redhat.com/articles/881893)
-to create your base rhel7 image. Then enable systemd within the rhel7 base image.
-Use [Running SystemD within a Docker Container](http://rhatdan.wordpress.com/2014/04/30/running-systemd-within-a-docker-container/) to enable SystemD.
+This guide assumes you have Docker installed on your host system. Use the [Get Started with Docker Containers in RHEL 7](https://access.redhat.com/articles/881893] to install Docker on RHEL 7) to setup your Docker on your RHEL 7 host if needed. Reference the [Getting images from outside Docker registries](https://access.redhat.com/articles/881893#images) section of the the guide to pull your base rhel7 image from Red Hat's private registry. This is required to build the rhel7-systemd base image used by the neutron-server container.
 
-Although the container does initialize the database used by Neutron Server, it does not create the database, permissions, etc.. These are responsibilities of the database service.
+Make sure your Docker host has been configured with the required [OSP 5 channels and repositories](https://access.redhat.com/documentation/en-US/Red_Hat_Enterprise_Linux_OpenStack_Platform/5/html/Installation_and_Configuration_Guide/chap-Prerequisites.html#sect-Software_Repository_Configuration)
 
-Although the python-neutron client is installed, it currently does not work due to the following error. For the time being, use Neutron CLI commands from another host/container with python-neutronclient installed.```
+After following the [Get Started with Docker Containers in RHEL 7](https://access.redhat.com/articles/881893) guide, verify your Docker Registry is running:
+```
+# systemctl status docker-registry
+docker-registry.service - Registry server for Docker
+   Loaded: loaded (/usr/lib/systemd/system/docker-registry.service; enabled)
+   Active: active (running) since Mon 2014-05-05 13:42:56 EDT; 601ms ago
+ Main PID: 21031 (gunicorn)
+   CGroup: /system.slice/docker-registry.service
+           ├─21031 /usr/bin/python /usr/bin/gunicorn --access-logfile - --debug ...
+            ...
+```
+Now that you have the rhel7 base image, follow the instructions in the [docker-rhel7-systemd project](https://github.com/danehans/docker-rhel7-systemd/blob/master/README.md) to build your rhel7-systemd image.
+
+Although the container does initialize the database used by neutron-server, it does not create the database, permissions, etc.. These are responsibilities of the database service.
+
+Although the python-neutron client is installed, it currently does not work due to the following error. For the time being, use Neutron CLI commands from another host/container with python-neutronclient installed.
+```
 Traceback (most recent call last):
   File "/usr/bin/neutron", line 6, in <module>
     from neutronclient.shell import main
@@ -43,63 +56,140 @@ OSError: [Errno 2] No such file or directory
 Installation
 ------------
 
-This guide assumes you have Docker installed on your host system. Use the [Get Started with Docker Containers in RHEL 7](https://access.redhat.com/articles/881893] to install Docker on RHEL 7) to setup your Docker on your RHEL 7 host if needed.
+From your Docker Registry, set the environment variables used to automate the image building process
 
-### From Github
+Required. Name of the Github repo. Change danehans to your Github repo name if you forked this project. Otherwise set REPO_NAME to danehans.
+```
+export REPO_NAME=danehans
+```
+Required. The branch from the REPO_NAME repo. Unless you are using a different branch, set the REPO_BRANCH to master.
+```
+export REPO_BRANCH=master
+```
+Optional. Name of the Docker base image in your Docker Registry. This should be the image that includes systemd. Defaults to rhel7-systemd.
+```
+export BASE_IMAGE=ouruser/rhel7-systemd
+```
+Optional. Name to use for the Keystone Docker image. Defaults to keystone.
+```
+export IMAGE_NAME=ouruser/keystone
+```
+Optional. Hostname to use when running the Keystone container. Defaults to $HOSTNAME
+```
+export KEYSTONE_HOSTNAME=keystone.example.com
+```
+Required. IP address/hostname of the Database server.
+```
+export DB_HOST=10.10.10.200
+```
+Optional. Password used to connect to the Keystone database on the DB_HOST server. Defaults to changeme.
+```
+export DB_PASSWORD=changeme
+```
+Required. IP address/hostname of the RabbitMQ server.
+```
+export RABBIT_HOST=10.10.10.200
+```
+Optional. Username/Password used to connect to the RabbitMQ server.
+```
+export RABBIT_USER=guest
+export RABBIT_PASSWORD=guest
+```
+Required. IP address/hostname of Keystone. This address should resolve to the IP used by the Host and not the container.
+```
+export KEYSTONE_HOST=10.10.10.100
+```
+Optional. TCP Port used to connect to the Keystone server Admin API. Defaults to 35357.
+```
+export KEYSTONE_ADMIN_HOST_PORT=35357
+```
+Optional. TCP Port used to connect to the Keystone server Public API. Defaults to 5000.
+```
+export KEYSTONE_PUBLIC_HOST_PORT=5000
+```
+Optional. The name and password of the service tenant within the Keystone service catalog. Defaults to service/changeme
+```
+export SERVICE_TENANT=services
+export SERVICE_PASSWORD=changeme
+```
+Optional. Credentials used in the Keystone RC files. Defaults to changeme.
+```
+export ADMIN_USER_PASSWORD=changeme
+export DEMO_USER_PASSWORD=changeme
+```
+Required.The IP address/hostname of the Nova API server.
+```
+export NOVA_API_HOST=10.10.10.100
+```
+Optional. The List of network type driver entrypoints to be loaded from the neutron.ml2.type_drivers namespace. Example: type_drivers = flat,vlan,gre,vxlan. Defaults to local. The default value 'local' is useful for single-box testing but provides no connectivity between hosts.
+```
+export TYPE_DRIVERS=vxlan
+```
+Optional. Ordered list of network_types to allocate as tenant networks. Defaults to local. The default value 'local' is useful for single-box testing but provides no connectivity between hosts.
+```
+export TENANT_NETWORK_TYPES=vxlan
+```
+Additional environment variables can be set as needed. You can reference the [build script](https://github.com/danehans/docker-neutron-server/blob/master/data/scripts/build#L14-L76) to review all the available environment variables options and their default settings.
 
-Clone the Github repo and change to the project directory:
-```
-yum install -y git
-git clone https://github.com/danehans/docker-neutron-server.git
-cd docker-neutron-server
-```
-Edit the neutron.conf, ml2_conf.ini and all .sh files according to your deployment needs. Replace all configuration parameters in the %NAME% format. Refer to the OpenStack [Icehouse installation guide](http://docs.openstack.org/icehouse/install-guide/install/yum/content/neutron-ml2-controller-node.html) for details. The project includes .example files for reference purposes.
+Refer to the OpenStack [Icehouse installation guide](http://docs.openstack.org/icehouse/install-guide/install/yum/content/neutron-controller-node.html) for more details on the .conf configuration parameters.
 
-Build your Docker neutron-server image.
+Run the build script.
 ```
-docker build -t neutron-server .
+bash <(curl \-fsS https://raw.githubusercontent.com/$REPO_NAME/docker-neutron-server/$REPO_BRANCH/data/scripts/build)
 ```
 The image should now appear in your image list:
 ```
 $ docker images
-REPOSITORY                TAG                 IMAGE ID            CREATED             VIRTUAL SIZE
-neutron-server                      latest              d75185a8e696        3 minutes ago       555 MB
+REPOSITORY          TAG                 IMAGE ID            CREATED             VIRTUAL SIZE
+neutron-server      latest              d75185a8e696        3 minutes ago       555 MB
 ```
-Run the Neutron Server container. The example below uses the -h flag to configure the hostame as neutron-server within the container, exposes TCP port 9696 on the Docker host, names the container neutron-server, uses -d to run the container as a daemon.
+Now you can run a Keystone container from the newly created image. You can use the run script or run the container manually.
+
+First, set your environment variables:
 ```
-docker run --privileged -d -h neutron-server -v /sys/fs/cgroup:/sys/fs/cgroup:ro \
--p 9696:9696 --name="neutron-server" neutron-server
+export IMAGE_NAME=ouruser/neutron-server
+export NEUTRON_SERVER_HOSTNAME=neutron-server.example.com
+export DNS_SEARCH=example.com
+```
+Additional environment variables can be set as needed. You can reference the [run script](https://github.com/danehans/docker-neutron-server/blob/master/data/scripts/run#L14-L24) to review all the available environment variables options and their default settings.
+
+**Option 1-** Use the run script:
+```
+# . $HOME/docker-neutron-server/data/scripts/run
+```
+**Option 2-** Manually:
+Run the neutron-server container. The example below uses the -h flag to configure the hostame as neutron-server within the container, exposes TCP port 9696 on the Docker host, names the container neutron-server, uses -d to run the container as a daemon.
+```
+# docker run --privileged -d -h neutron-server -v /sys/fs/cgroup:/sys/fs/cgroup:ro \
+-p 9696:9696 --name="neutron-server" ouruser/neutron-server
 ```
 **Note:** SystemD requires CAP_SYS_ADMIN capability and access to the cgroup file system within a container. Therefore, --privileged and -v /sys/fs/cgroup:/sys/fs/cgroup:ro are required flags.
 
 Verification
 ------------
 
-Verify your Neutron Server container is running:
+Verify your neutron-server container is running:
 ```
-$ docker ps
+# docker ps
 CONTAINER ID  IMAGE         COMMAND          CREATED             STATUS              PORTS                                          NAMES
 96173898fa16  neutron-server:latest   /usr/sbin/init   About an hour ago   Up 51 minutes       0.0.0.0:9696->9696/tcp neutron-server
 ```
-Access the shell from your container:
+If you did not use the run script, manually access the shell of your container:
 ```
-$ docker inspect --format='{{.State.Pid}}' neutron-server
+# docker inspect --format='{{.State.Pid}}' neutron-server
 ```
-The command above will provide a process ID of the Neutron Server container that is used in the following command:
+The command above will provide a process ID of the neutron-server container that is used in the following command:
 ```
-$ nsenter -m -u -n -i -p -t <PROCESS_ID> /bin/bash
+# nsenter -m -u -n -i -p -t <PROCESS_ID> /bin/bash
 bash-4.2#
 ```
-From here you can perform limited functions such as viewing installed RPMs, the neutron.conf file, etc..
-
+You can now perform limited functions such as viewing installed RPMs, the neutron.conf file, etc.. Source your Neutron Server credential file. **Note:** The python-neutronclient currently does not work. The following is for reference puposes only.
 ```
-Source your Neutron Server credential file. **Note:** The python-neutronclient currently does not work. The following is for reference puposes only.```
-$ unset OS_SERVICE_TOKEN OS_SERVICE_ENDPOINT
-$ source /root/admin-openrc.sh
+# source /root/admin-openrc.sh
 ```
 Verify the neutron-server service is running.
 ```
-$ systemctl status neutron-server -l
+# systemctl status neutron-server -l
 neutron-server.service - OpenStack Neutron Server
    Loaded: loaded (/usr/lib/systemd/system/neutron-server.service; enabled)
    Active: active (running) since Mon 2014-09-15 22:33:46 EDT; 24min ago
@@ -112,7 +202,7 @@ Sep 15 22:33:46 neutron-server systemd[1]: Started OpenStack Neutron Server.
 ```
 You should be able to perform a neutron net-list and receive a blank response. **Note:** The python-neutronclient currently does not work, so Neutron CLI commands MUST be performed from another container/host with the python-neutronclient installed.
 ```
-$ neutron net-list
+# neutron net-list
 +--------------------------------------+--------+-------------------------------------------------------+
 | id                                   | name   | subnets                                               |
 +--------------------------------------+--------+-------------------------------------------------------+
@@ -120,7 +210,7 @@ $ neutron net-list
 ```
 Verify the extentions loaded by the server:
 ```
-neutron ext-list
+# neutron ext-list
 +-----------------------+-----------------------------------------------+
 | alias                 | name                                          |
 +-----------------------+-----------------------------------------------+
@@ -153,13 +243,13 @@ Troubleshooting
 
 Can you connect to the OpenStack API endpints from your Docker host and container? Verify connectivity with tools such as ping and curl.
 ```
-$ yum install -y curl
-$ curl -s -d  "{\"auth\":{\"passwordCredentials\": {\"username\": \"neutron\", \"password\": \"%SERVICE_PASSWORD%\"}, \"tenantName\": \"%SERVICE_TENANT%\"}}" -H "Content-type: application/json" http://%KEYSTONE_HOST%:35357/v2.0/tokens
+# yum install -y curl
+# curl -s -d  "{\"auth\":{\"passwordCredentials\": {\"username\": \"neutron\", \"password\": \"%SERVICE_PASSWORD%\"}, \"tenantName\": \"%SERVICE_TENANT%\"}}" -H "Content-type: application/json" http://%KEYSTONE_HOST%:35357/v2.0/tokens
 
 ```
 IPtables may be blocking you. Check IPtables rules on the host(s) running the other OpenStack services:
 ```
-$ iptables -L
+# iptables -L
 ```
 To change iptables rules:
 ```

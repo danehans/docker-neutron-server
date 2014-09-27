@@ -1,0 +1,27 @@
+neutron.conf.erb:
+  target: /etc/neutron/neutron.conf
+  user: root
+  group: neutron
+  perms: 0644
+  config: {}
+
+ml2_conf.ini.erb:
+  target: /etc/neutron/plugins/ml2/ml2_conf.ini
+  user: root
+  group: neutron
+  perms: 0644
+  config: {}
+
+admin-openrc.erb:
+  target: /root/admin-openrc.sh
+  user: root
+  group: root
+  perms: 0755
+  config: {}
+
+demo-openrc.erb:
+  target: /root/demo-openrc.sh
+  user: root
+  group: root
+  perms: 0755
+  config: {}

@@ -140,18 +140,16 @@ auth_strategy = keystone
 # kombu_ssl_ca_certs =
 # IP address of the RabbitMQ installation
 # rabbit_host = localhost
-rabbit_host = 10.10.10.200
+rabbit_host = <%= env_rabbit_host %>
+# User ID used for RabbitMQ connections
+rabbit_userid = <%= env_rabbit_user %>
 # Password of the RabbitMQ server
-# rabbit_password = guest
-rabbit_password = guest
+rabbit_password = <%= env_rabbit_password %>
 # Port where RabbitMQ server is running/listening
 # rabbit_port = 5672
-rabbit_port = 5672
 # RabbitMQ single or HA cluster (host:port pairs i.e: host1:5672, host2:5672)
 # rabbit_hosts is defaulted to '$rabbit_host:$rabbit_port'
 # rabbit_hosts = localhost:5672
-# User ID used for RabbitMQ connections
-# rabbit_userid = guest
 # Location of a virtual RabbitMQ installation.
 # rabbit_virtual_host = /
 # Maximum retries with trying to connect to RabbitMQ
@@ -317,11 +315,11 @@ notify_nova_on_port_data_changes = True
 
 # URL for connection to nova (Only supports one nova region currently).
 # nova_url = http://127.0.0.1:8774/v2
-nova_url = http://10.10.10.100:8774/v2
+nova_url = http://<%= env_nova_api_host %>:8774/v2
 
 # Name of nova region to use. Useful if keystone manages more than one region
 # nova_region_name =
-nova_region_name =RegionOne
+nova_region_name = RegionOne
 
 # Username for connection to nova in admin context
 # nova_admin_username =
@@ -329,15 +327,15 @@ nova_admin_username = nova
 
 # The uuid of the admin nova tenant
 # nova_admin_tenant_id =
-nova_admin_tenant_id = 5ae49e7dbdd94b728d25935b6df06be8
+nova_admin_tenant_id = <%= env_nova_admin_tenant_id %>
 
 # Password for connection to nova in admin context.
 # nova_admin_password =
-nova_admin_password = changeme
+nova_admin_password = <%= env_nova_admin_password %>
 
 # Authorization URL for connection to nova in admin context.
 # nova_admin_auth_url =
-nova_admin_auth_url = http://10.10.10.100:35357/v2.0
+nova_admin_auth_url = http://<%= env_keystone_host %>:35357/v2.0
 
 # Number of seconds between sending events to nova if there are any events to send
 # send_events_interval = 2
@@ -413,25 +411,19 @@ report_interval = 30
 # ===========  end of items for agent management extension =====
 
 [keystone_authtoken]
-# auth_host = 127.0.0.1
-auth_host = 10.10.10.100
+auth_host = <%= env_keystone_host %>
 # auth_port = 35357
-auth_port = 35357
 # auth_protocol = http
-auth_protocol = http
-# admin_tenant_name = %SERVICE_TENANT_NAME%
-admin_tenant_name = services
-# admin_user = %SERVICE_USER%
+admin_tenant_name = <%= env_service_tenant %>
 admin_user = neutron
-# admin_password = %SERVICE_PASSWORD%
-admin_password = changeme
-auth_uri=http://10.10.10.100:5001/
+admin_password = <%= env_service_password %>
+auth_uri=http://<%= env_keystone_host %>:<%= env_keystone_public_host_port %>/
 
 [database]
 # This line MUST be changed to actually run the plugin.
 # Example:
 # connection = mysql://root:pass@127.0.0.1:3306/neutron
-connection = mysql://neutron:changeme@10.10.10.200/neutron
+connection = mysql://neutron:<%= env_db_password %>@<%= env_db_host %>/neutron
 
 # Replace 127.0.0.1 above with the IP address of the database used by the
 # main neutron server. (Leave it as is if the database runs on this host.)

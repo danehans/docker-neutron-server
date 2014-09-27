@@ -1,0 +1,153 @@
+#!/bin/bash
+#
+# Script to create and run docker-neutron-server image.
+#
+set -x
+set -e
+
+# Check for Root user
+if [ "$(id -u)" != "0" ]; then
+    echo "This script must be run as root or with sudo"
+    exit 1
+fi
+
+# docker-neutron-server Github Repo Name
+export REPO_NAME="${REPO_NAME:-}"
+
+# docker-neutron-server Github Repo branch
+export REPO_BRANCH="${REPO_BRANCH:-}"
+
+# The name of the Docker base image.
+# This should be a RHEL7 image with systemd.
+export BASE_IMAGE="${BASE_IMAGE:-rhel7-systemd}"
+
+# Configure the Docker Neutron Image Name
+export IMAGE_NAME="${IMAGE_NAME:-neutron-server}"
+
+# Configure the DB Host
+export DB_HOST="${DB_HOST:-}"
+
+# Configure the DB Password
+export DB_PASSWORD="${DB_PASSWORD:-changeme}"
+
+# Configure the RabbitMQ Host
+export RABBIT_HOST="${RABBIT_HOST:-}"
+
+# Configure the RabbitMQ User ID
+export RABBIT_USER="${RABBIT_USER:-guest}"
+
+# Configure the RabbitMQ User Password
+export RABBIT_PASSWORD="${RABBIT_PASSWORD:-guest}"
+
+# IP Address/Hostname of the Keystone server.
+export KEYSTONE_HOST="${KEYSTONE_HOST:-127.0.0.1}"
+
+# Configure the TCP port used to connect to the Keystone Admin API.
+export KEYSTONE_ADMIN_HOST_PORT="${KEYSTONE_ADMIN_HOST_PORT:-35357}"
+
+# Configure the TCP port used to connect to the Keystone Public API.
+export KEYSTONE_PUBLIC_HOST_PORT="${KEYSTONE_PUBLIC_HOST_PORT:-5000}"
+
+# Configure the Service Tenant
+export SERVICE_TENANT="${SERVICE_TENANT:-service}"
+
+# Configure the Service Password
+export SERVICE_PASSWORD="${SERVICE_PASSWORD:-changeme}"
+
+# Configure the Admin User Password for the admin-openrc file
+export ADMIN_USER_PASSWORD="${ADMIN_USER_PASSWORD:-changeme}"
+
+# Configure the Demo User Password for the demo-openrc file
+export DEMO_USER_PASSWORD="${DEMO_USER_PASSWORD:-changeme}"
+
+# IP address/Hostname of the Nova API server.
+export NOVA_API_HOST="${NOVA_API_HOST:-127.0.0.1}"
+
+# The tenant ID of the Keystone service tenant.
+NOVA_ADMIN_TENANT_ID="$(keystone --os-token=$SERVICE_PASSWORD --os-endpoint=http://$KEYSTONE_HOST:$KEYSTONE_ADMIN_HOST_PORT/v2.0/ tenant-list | grep $SERVICE_TENANT | awk '{print $2;}')"
+
+# The password of the Keystone Nova user.
+export NOVA_ADMIN_PASSWORD="${NOVA_ADMIN_PASSWORD:-$SERVICE_PASSWORD}"
+
+# type_drivers = local,flat,vlan,gre,vxlan
+export TYPE_DRIVERS="${TYPE_DRIVERS:-local}"
+
+# Ordered list of network_types to allocate as tenant networks.
+export TENANT_NETWORK_TYPES="${TENANT_NETWORK_TYPES:-local}" 
+
+# Install docker-neutron-server project
+if ! [ -d $HOME/docker-neutron-server ]; then
+  git clone -b $REPO_BRANCH https://github.com/danehans/docker-neutron-server.git $HOME/docker-neutron-server
+fi
+
+if ! [ -f $HOME/docker-neutron-server/Dockerfile ]; then
+  cat <<EOF > $HOME/docker-neutron-server/Dockerfile
+# Neutron
+# VERSION               0.0.1
+# Tested on RHEL7 and OSP5 (i.e. Icehouse)
+
+FROM $BASE_IMAGE
+MAINTAINER Daneyon Hansen "daneyonhansen@gmail.com"
+
+# Set environment variables within the Neutron image/container.
+ENV DB_HOST $DB_HOST
+ENV DB_PASSWORD $DB_PASSWORD
+ENV RABBIT_HOST $RABBIT_HOST
+ENV RABBIT_USER $RABBIT_USER
+ENV RABBIT_PASSWORD $RABBIT_PASSWORD
+ENV KEYSTONE_HOST $KEYSTONE_HOST 
+ENV KEYSTONE_ADMIN_HOST_PORT $KEYSTONE_ADMIN_HOST_PORT
+ENV KEYSTONE_PUBLIC_HOST_PORT $KEYSTONE_PUBLIC_HOST_PORT
+ENV SERVICE_TENANT $SERVICE_TENANT
+ENV SERVICE_PASSWORD $SERVICE_PASSWORD
+ENV DEMO_USER_PASSWORD $DEMO_USER_PASSWORD
+ENV ADMIN_USER_PASSWORD $ADMIN_USER_PASSWORD
+ENV NOVA_API_HOST $NOVA_API_HOST
+ENV NOVA_ADMIN_PASSWORD $NOVA_ADMIN_PASSWORD
+ENV TYPE_DRIVERS $TYPE_DRIVERS
+ENV TENANT_NETWORK_TYPES $TENANT_NETWORK_TYPES
+
+# Set working directory for RUN and CMD instructions.
+WORKDIR /root
+
+# Required Utilities. Note: Mariadb is required for data and endpoint scripts.
+RUN yum -y install openssl ntp wget rubygems python-keystoneclient
+RUN systemctl enable ntpd
+
+# Set ENV to create NOVA_ADMIN_TENANT_ID parameter.
+ENV NOVA_ADMIN_TENANT_ID $NOVA_ADMIN_TENANT_ID
+
+# Tiller Installation. For more info: https://github.com/markround/tiller
+RUN gem install tiller
+ADD data/tiller/common.yaml /etc/tiller/common.yaml
+ADD data/tiller/environments/production.yaml /etc/tiller/environments/production.yaml
+ADD data/tiller/templates/ml2_conf.ini.erb /etc/tiller/templates/ml2_conf.ini.erb
+ADD data/tiller/templates/neutron.conf.erb /etc/tiller/templates/neutron.conf.erb
+ADD data/tiller/templates/admin-openrc.erb /etc/tiller/templates/admin-openrc.erb
+ADD data/tiller/templates/demo-openrc.erb /etc/tiller/templates/demo-openrc.erb
+
+# Install Neutron Packages
+RUN yum -y install openstack-neutron openstack-neutron-ml2 python-neutronclient
+
+# Run Tiller to populate conf and RC files.
+RUN /usr/local/bin/tiller
+
+# Create sym link per docs.openstack.org
+RUN ln -s /etc/neutron/plugins/ml2/ml2_conf.ini /etc/neutron/plugin.ini
+
+# Enable neutron-server service
+RUN systemctl enable neutron-server
+
+# Expose neutron-server TCP port
+EXPOSE 9696
+
+# Start Init
+CMD ["/usr/sbin/init"]
+EOF
+fi
+
+echo 'Dockerfile generated. Now building image'
+
+sudo docker build -t $IMAGE_NAME $HOME/docker-neutron-server
+
+exit $?
